@@ -45,7 +45,7 @@ class ImprovedColumnPredictor(nn.Module):
 class Stage3Predictor:
     """Production wrapper for Stage 3 model"""
     
-    def __init__(self, model_path: str = "../column_predictor_no_leakage.pth"):
+    def __init__(self, model_path: str = "models/column_predictor_no_leakage.pth"):
         self.model_path = model_path
         self.model = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
