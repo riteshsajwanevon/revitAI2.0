@@ -41,10 +41,10 @@ venv.bak/
 .env.production
 
 # Model files (large files)
-models/*.pth
-models/*.pt
-models/*.pkl
-models/*.joblib
+# models/*.pth
+# models/*.pt
+# models/*.pkl
+# models/*.joblib
 
 # Data directories
 temp_data/
