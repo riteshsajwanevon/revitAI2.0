@@ -48,6 +48,64 @@ class CSVProcessor:
         """Check if two Z ranges overlap within tolerance"""
         return not (max1 < min2 - tol or min1 > max2 + tol)
     
+    def validate_csv(self, df: pd.DataFrame) -> None:
+        """
+        Validate CSV contains required columns and data
+        
+        Raises:
+            ValueError: If validation fails
+        """
+        
+        # Check required columns exist
+        required_columns = [
+            "Element Type", "Start X", "Start Y", "Start Z",
+            "End X", "End Y", "End Z", "Structural Material", "Family"
+        ]
+        
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"CSV missing required columns: {', '.join(missing_columns)}")
+        
+        # Check Element Type contains required types
+        element_types = df["Element Type"].dropna().unique()
+        
+        has_structural_framing = any("Structural Framing" in str(et) for et in element_types)
+        has_wall = any("Wall" in str(et) for et in element_types)
+        
+        if not has_structural_framing:
+            raise ValueError("CSV must contain 'Structural Framing' elements")
+        
+        if not has_wall:
+            raise ValueError("CSV must contain 'Wall' elements")
+        
+        # Check Structural Framing elements have required data
+        structural_framing = df[df["Element Type"] == "Structural Framing"]
+        
+        if len(structural_framing) == 0:
+            raise ValueError("No Structural Framing elements found in CSV")
+        
+        # Check Start X, Y, Z are not empty for Structural Framing
+        for coord in ["Start X", "Start Y", "Start Z"]:
+            if structural_framing[coord].isna().any():
+                empty_count = structural_framing[coord].isna().sum()
+                raise ValueError(f"Structural Framing elements have empty {coord} values ({empty_count} elements)")
+        
+        # Check End X, Y, Z are not empty for Structural Framing
+        for coord in ["End X", "End Y", "End Z"]:
+            if structural_framing[coord].isna().any():
+                empty_count = structural_framing[coord].isna().sum()
+                raise ValueError(f"Structural Framing elements have empty {coord} values ({empty_count} elements)")
+        
+        # Check Structural Material is not empty for Structural Framing
+        if structural_framing["Structural Material"].isna().all():
+            raise ValueError("All Structural Framing elements have empty 'Structural Material' values")
+        
+        # Check Family is not empty for Structural Framing
+        if structural_framing["Family"].isna().all():
+            raise ValueError("All Structural Framing elements have empty 'Family' values")
+        
+        logger.info(f"CSV validation passed - Found {len(structural_framing)} Structural Framing elements")
+    
     def filter_elements(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Filter and separate beams, columns, and walls"""
         
@@ -270,6 +328,9 @@ class CSVProcessor:
             
             logger.info(f"Processing CSV for building {building_id}")
             logger.info(f"Total elements in CSV: {len(df)}")
+            
+            # Validate CSV structure and required data
+            self.validate_csv(df)
             
             # Extract node name from building_id or use building_id
             node_name = building_id

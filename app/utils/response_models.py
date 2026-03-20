@@ -65,6 +65,7 @@ class ColumnCoordinate(BaseModel):
     x: float
     y: float
     z: float
+    z_min: Optional[float] = None
     confidence: Optional[float] = None
 
 class Stage2Summary(BaseModel):
