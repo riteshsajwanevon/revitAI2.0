@@ -236,8 +236,9 @@ class Stage3Predictor:
         
         return selected_peaks
     
-    def _convert_peaks_to_coordinates(self, peaks: np.ndarray, beam_row: pd.Series) -> List[Dict[str, float]]:
-        """Convert 1D peak positions to 3D coordinates"""
+    def _convert_peaks_to_coordinates(self, peaks: np.ndarray, beam_row: pd.Series, 
+                                      output_signal: np.ndarray = None) -> List[Dict[str, float]]:
+        """Convert 1D peak positions to 3D coordinates with confidence values"""
         
         if len(peaks) == 0:
             return []
@@ -255,11 +256,17 @@ class Stage3Predictor:
             # Interpolate 3D position
             coord_3d = beam_start + rel_pos * (beam_end - beam_start)
             
+            # Extract confidence from output signal at peak position
+            confidence = None
+            if output_signal is not None and peak_idx < len(output_signal):
+                confidence = float(output_signal[int(peak_idx)])
+            
             coordinates.append({
                 "column_id": f"col_{i+1}",
                 "x": float(coord_3d[0]),
                 "y": float(coord_3d[1]),
-                "z": float(coord_3d[2])
+                "z": float(coord_3d[2]),
+                "confidence": confidence
             })
         
         return coordinates
@@ -320,7 +327,7 @@ class Stage3Predictor:
                     
                     if not beam_info.empty:
                         beam_row = beam_info.iloc[0]
-                        coordinates = self._convert_peaks_to_coordinates(constrained_peaks, beam_row)
+                        coordinates = self._convert_peaks_to_coordinates(constrained_peaks, beam_row, output_signal)
                         
                         for coord in coordinates:
                             all_coordinates.append({
@@ -330,7 +337,7 @@ class Stage3Predictor:
                                 "x": coord["x"],
                                 "y": coord["y"],
                                 "z": coord["z"],
-                                "confidence": None  # Could add confidence from CNN output
+                                "confidence": coord["confidence"]
                             })
                 
                 except Exception as e:
