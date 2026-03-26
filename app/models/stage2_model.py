@@ -25,14 +25,15 @@ class Stage2GNN(torch.nn.Module):
         super().__init__()
         self.c1 = SAGEConv(input_dim, hidden_dim)
         self.c2 = SAGEConv(hidden_dim, hidden_dim)
-        self.head = torch.nn.Linear(hidden_dim, num_classes)       # column count: 0/1/2
-        self.mat_head = torch.nn.Linear(hidden_dim, 8)             # column structural material
+        self.head        = torch.nn.Linear(hidden_dim, num_classes)  # column count: 0/1/2
+        self.mat_head    = torch.nn.Linear(hidden_dim, 8)            # column structural material
+        self.length_head = torch.nn.Linear(hidden_dim, 1)            # avg column length (regression)
         
     def forward(self, x, edge_index):
         x = F.relu(self.c1(x, edge_index))
         x = F.dropout(x, 0.35, self.training)
         x = F.relu(self.c2(x, edge_index))
-        return self.head(x), self.mat_head(x)
+        return self.head(x), self.mat_head(x), self.length_head(x)
 
 class Stage2Predictor:
     """Production wrapper for Stage 2 model"""
@@ -366,7 +367,7 @@ class Stage2Predictor:
             # Run inference
             logger.info("Running inference...")
             with torch.no_grad():
-                column_pred, material_pred = self.model(graph_data.x, graph_data.edge_index)
+                column_pred, material_pred, length_pred = self.model(graph_data.x, graph_data.edge_index)
                 column_probs = F.softmax(column_pred, dim=1)
                 column_predictions = torch.argmax(column_probs, dim=1)
                 material_predictions = torch.argmax(material_pred, dim=1)
@@ -397,27 +398,30 @@ class Stage2Predictor:
                 pred_columns = int(column_predictions[graph_idx].item())
                 confidence = float(column_probs[graph_idx, pred_columns].item())
                 
-                # Predict material for beams that need columns
+                # Predict material and length for beams that need columns
                 predicted_material = None
                 material_confidence = None
+                predicted_column_length = None
                 if pred_columns > 0:
-                    # Use material prediction for this beam's required columns
+                    # Material prediction
                     pred_material_id = int(material_predictions[graph_idx].item())
                     material_probs_beam = F.softmax(material_pred[graph_idx], dim=0)
                     material_confidence = float(material_probs_beam[pred_material_id].item())
-                    
-                    # Get material name
                     material_names = {v: k for k, v in self.material_mapping.items()}
                     predicted_material = material_names.get(pred_material_id, "Unknown")
+                    
+                    # Column length prediction
+                    predicted_column_length = float(length_pred[graph_idx].item())
                 
-                logger.info(f"Beam {beam_id} (graph_idx {graph_idx}): {pred_columns} columns, confidence: {confidence:.3f}, material: {predicted_material}")
+                logger.info(f"Beam {beam_id} (graph_idx {graph_idx}): {pred_columns} columns, confidence: {confidence:.3f}, material: {predicted_material}, length: {predicted_column_length}")
                 
                 beam_predictions.append({
                     "beam_id": beam_id,
                     "predicted_columns": pred_columns,
                     "confidence": confidence,
-                    "predicted_material": predicted_material,  # Material for new columns
+                    "predicted_material": predicted_material,
                     "material_confidence": material_confidence,
+                    "predicted_column_length": predicted_column_length,
                     "type": "beam"
                 })
                 
@@ -447,12 +451,14 @@ class Stage2Predictor:
             processing_time = time.time() - start_time
             
             # Create summary
+            lengths = [p["predicted_column_length"] for p in beam_predictions if p["predicted_column_length"] is not None]
             summary = {
                 "total_beams": len(beam_ids),
                 "total_columns": len(column_ids),
                 "predictions_by_count": predictions_by_count,
                 "average_confidence": float(np.mean([p["confidence"] for p in beam_predictions])) if beam_predictions else 0.0,
                 "average_material_confidence": float(np.mean([p["material_confidence"] for p in column_predictions_list])) if column_predictions_list else 0.0,
+                "average_predicted_column_length": float(np.mean(lengths)) if lengths else 0.0,
                 "processing_time": processing_time
             }
             

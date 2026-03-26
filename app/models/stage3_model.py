@@ -237,8 +237,9 @@ class Stage3Predictor:
         return selected_peaks
     
     def _convert_peaks_to_coordinates(self, peaks: np.ndarray, beam_row: pd.Series, 
-                                      output_signal: np.ndarray = None) -> List[Dict[str, float]]:
-        """Convert 1D peak positions to 3D coordinates with confidence values"""
+                                      output_signal: np.ndarray = None,
+                                      predicted_column_length: float = None) -> List[Dict[str, float]]:
+        """Convert 1D peak positions to 3D coordinates with confidence and z_min"""
         
         if len(peaks) == 0:
             return []
@@ -261,11 +262,16 @@ class Stage3Predictor:
             if output_signal is not None and peak_idx < len(output_signal):
                 confidence = float(output_signal[int(peak_idx)])
             
+            # z_min = z - predicted_column_length from Stage 2
+            z = float(coord_3d[2])
+            z_min = round(z - predicted_column_length, 6) if predicted_column_length is not None else None
+            
             coordinates.append({
                 "column_id": f"col_{i+1}",
                 "x": float(coord_3d[0]),
                 "y": float(coord_3d[1]),
-                "z": float(coord_3d[2]),
+                "z": z,
+                "z_min": z_min,
                 "confidence": confidence
             })
         
@@ -296,8 +302,18 @@ class Stage3Predictor:
             constraints_satisfied = 0
             
             # Process each beam
-            for beam_id, max_columns in stage2_constraints.items():
+            for beam_id, constraint in stage2_constraints.items():
                 try:
+                    # Support both old format (int) and new format (dict)
+                    if isinstance(constraint, dict):
+                        max_columns = constraint["predicted_columns"]
+                        predicted_column_length = constraint.get("predicted_column_length")
+                    else:
+                        max_columns = constraint
+                        predicted_column_length = None
+
+                    if max_columns == 0:
+                        continue
                     # Generate signals
                     wall_signal, beam_signal = self._generate_beam_signals(
                         feature_df, beam_wall_df, beam_beam_df, beam_id
@@ -327,7 +343,9 @@ class Stage3Predictor:
                     
                     if not beam_info.empty:
                         beam_row = beam_info.iloc[0]
-                        coordinates = self._convert_peaks_to_coordinates(constrained_peaks, beam_row, output_signal)
+                        coordinates = self._convert_peaks_to_coordinates(
+                            constrained_peaks, beam_row, output_signal, predicted_column_length
+                        )
                         
                         for coord in coordinates:
                             all_coordinates.append({
@@ -337,6 +355,7 @@ class Stage3Predictor:
                                 "x": coord["x"],
                                 "y": coord["y"],
                                 "z": coord["z"],
+                                "z_min": coord["z_min"],
                                 "confidence": coord["confidence"]
                             })
                 

@@ -53,8 +53,9 @@ class BeamPrediction(BaseModel):
     beam_id: str
     predicted_columns: int
     confidence: Optional[float] = None
-    predicted_material: Optional[str] = None  # Material for new columns (if predicted_columns > 0)
+    predicted_material: Optional[str] = None
     material_confidence: Optional[float] = None
+    predicted_column_length: Optional[float] = None
     type: Optional[str] = "beam"
 
 class ColumnCoordinate(BaseModel):
@@ -72,9 +73,10 @@ class Stage2Summary(BaseModel):
     """Stage 2 prediction summary"""
     total_beams: int
     total_columns: Optional[int] = 0
-    predictions_by_count: Dict[str, int]  # "0": count, "1": count, "2": count
+    predictions_by_count: Dict[str, int]
     average_confidence: Optional[float] = None
     average_material_confidence: Optional[float] = None
+    average_predicted_column_length: Optional[float] = None
     processing_time: float
 
 class Stage3Summary(BaseModel):

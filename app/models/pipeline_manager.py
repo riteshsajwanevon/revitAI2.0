@@ -169,7 +169,10 @@ class PipelineManager:
             stage2_constraints = {}
             beam_predictions = [p for p in stage2_results["predictions"] if p.get("type", "beam") == "beam"]
             for prediction in beam_predictions:
-                stage2_constraints[prediction["beam_id"]] = prediction["predicted_columns"]
+                stage2_constraints[prediction["beam_id"]] = {
+                    "predicted_columns": prediction["predicted_columns"],
+                    "predicted_column_length": prediction.get("predicted_column_length")
+                }
             
             logger.info(f"Extracted {len(stage2_constraints)} beam constraints for Stage 3")
             
@@ -197,6 +200,7 @@ class PipelineManager:
                             "confidence": p["confidence"],
                             "predicted_material": p.get("predicted_material"),
                             "material_confidence": p.get("material_confidence"),
+                            "predicted_column_length": p.get("predicted_column_length"),
                             "type": p.get("type", "beam")
                         }
                         for p in stage2_results["predictions"]
@@ -217,6 +221,7 @@ class PipelineManager:
                         "predictions_by_count": stage2_results["summary"]["predictions_by_count"],
                         "average_confidence": stage2_results["summary"]["average_confidence"],
                         "average_material_confidence": stage2_results["summary"].get("average_material_confidence", 0.0),
+                        "average_predicted_column_length": stage2_results["summary"].get("average_predicted_column_length", 0.0),
                         "processing_time": stage2_results["summary"]["processing_time"]
                     },
                     "processing_time": stage2_results["processing_time"],
